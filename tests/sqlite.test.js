@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EffectQueue } from '../src/effects.js';
-import { openSqlite } from '../src/sqlite.js';
+import { assertSqliteAvailable, openSqlite } from '../src/sqlite.js';
 import { createUnit } from '../src/unit.js';
 
 test('a committed unit survives a close and reopen; the queue resumes it', async () => {
@@ -166,3 +166,41 @@ test('savepoint names are validated before reaching sqlite', () => {
     db.close();
   }
 });
+
+test('the sqlite guard accepts Node 22.5 and newer', () => {
+  const real = assertSqliteAvailable();
+  assert.equal(typeof real.DatabaseSync, 'function');
+  // Versions are compared numerically, not textually: "22.5.10" must pass just
+  // like "22.6.0".
+  assert.equal(assertSqliteAvailable('22.5.0', () => real), real);
+  assert.equal(assertSqliteAvailable('22.5.10', () => real), real);
+  assert.equal(assertSqliteAvailable('23.0.0', () => real), real);
+});
+
+test('the sqlite guard names the minimum, the actual version and the fallback', () => {
+  let probed = false;
+  assert.throws(
+    () =>
+      assertSqliteAvailable('22.4.9', () => {
+        probed = true;
+        return undefined;
+      }),
+    (error) => {
+      assert.match(error.message, /Node >= 22\.5/);
+      assert.match(error.message, /this process is Node 22\.4\.9/);
+      assert.match(error.message, /plc-runtime-kit\/memory/);
+      return true;
+    },
+  );
+  // A version that is already ruled out must not probe the module: the guard
+  // is a specific version check, not a catch-all around the import.
+  assert.equal(probed, false);
+});
+
+test('the sqlite guard reports a failed module load without hiding the version', () => {
+  assert.throws(
+    () => assertSqliteAvailable('24.0.0', () => undefined),
+    /Node >= 22\.5.*this process is Node 24\.0\.0.*plc-runtime-kit\/memory/s,
+  );
+});
+

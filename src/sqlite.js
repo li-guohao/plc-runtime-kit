@@ -2,7 +2,82 @@
 // Import this module only when you need SQLite: it pulls in a built-in module
 // that is unavailable on older Node versions (needs >= 22.5).
 
-import { DatabaseSync } from 'node:sqlite';
+import { createRequire } from 'node:module';
+
+const MIN_NODE = [22, 5, 0];
+const requireFromHere = createRequire(import.meta.url);
+
+/**
+ * @typedef {{DatabaseSync: typeof import('node:sqlite').DatabaseSync}} SqliteModule
+ * @typedef {import('node:sqlite').DatabaseSync} SqliteDatabase
+ */
+
+/**
+ * Compares the first three components of a Node version numerically. A prerelease
+ * suffix does not matter here: the built-in module is gated by major/minor.
+ *
+ * @param {string} version
+ * @returns {boolean}
+ */
+function meetsMinimumNode(version) {
+  const parts = String(version).split('.');
+  for (let index = 0; index < MIN_NODE.length; index += 1) {
+    const actual = Number.parseInt(parts[index] ?? '', 10);
+    if (!Number.isInteger(actual)) return false;
+    if (actual !== MIN_NODE[index]) return actual > MIN_NODE[index];
+  }
+  return true;
+}
+
+/**
+ * @param {string} version
+ * @param {string} detail  why the module is unavailable, appended verbatim
+ * @returns {string}
+ */
+function unavailableMessage(version, detail) {
+  return (
+    '`plc-runtime-kit/sqlite` requires Node >= 22.5 for the built-in `node:sqlite` module' +
+    `${detail}; this process is Node ${version}. ` +
+    'Use `plc-runtime-kit/memory` for an in-process effect store, or upgrade Node to 22.5 or newer.'
+  );
+}
+
+/**
+ * Resolves `node:sqlite`, or `undefined` when this Node build lacks it. The catch
+ * is deliberately narrow: only the module load itself is wrapped, so a failure
+ * inside SQLite is never disguised as a version problem.
+ *
+ * @returns {SqliteModule | undefined}
+ */
+function loadSqliteModule() {
+  try {
+    return /** @type {SqliteModule} */ (requireFromHere('node:sqlite'));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Fails loudly, with the three facts a caller needs, before any adapter is built.
+ * Exported so tests can inject a version and a loader instead of changing the real
+ * Node version.
+ *
+ * @param {string} [version]  Node version to check, defaults to the running one
+ * @param {() => SqliteModule | undefined} [load]  module loader, injectable for tests
+ * @returns {SqliteModule}
+ */
+export function assertSqliteAvailable(version = process.versions.node, load = loadSqliteModule) {
+  if (!meetsMinimumNode(version)) {
+    throw new Error(unavailableMessage(version, ' (this Node version is too old)'));
+  }
+  const sqlite = load();
+  if (sqlite === undefined || typeof sqlite.DatabaseSync !== 'function') {
+    throw new Error(unavailableMessage(version, ' (the module is missing from this Node build)'));
+  }
+  return sqlite;
+}
+
+const { DatabaseSync } = assertSqliteAvailable();
 
 const SAVEPOINT_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
@@ -28,7 +103,7 @@ function safeName(name) {
 export class SqliteTransactionDriver {
   #db;
 
-  /** @param {DatabaseSync} db */
+  /** @param {SqliteDatabase} db */
   constructor(db) {
     if (db === null || typeof db !== 'object' || typeof db.exec !== 'function') {
       throw new TypeError('SqliteTransactionDriver needs a DatabaseSync handle');
@@ -58,10 +133,10 @@ export class SqliteTransactionDriver {
  */
 export class SqliteEffectStore {
   #db;
-  /** @type {Map<string, ReturnType<DatabaseSync['prepare']>>} */
+  /** @type {Map<string, ReturnType<SqliteDatabase['prepare']>>} */
   #statements = new Map();
 
-  /** @param {DatabaseSync} db */
+  /** @param {SqliteDatabase} db */
   constructor(db) {
     if (db === null || typeof db !== 'object' || typeof db.prepare !== 'function' || typeof db.exec !== 'function') {
       throw new TypeError('SqliteEffectStore needs a DatabaseSync handle');
@@ -224,7 +299,7 @@ export class SqliteEffectStore {
  * use. The caller owns `db` and must close it.
  *
  * @param {string} path
- * @returns {{db: DatabaseSync, driver: SqliteTransactionDriver, store: SqliteEffectStore}}
+ * @returns {{db: SqliteDatabase, driver: SqliteTransactionDriver, store: SqliteEffectStore}}
  */
 export function openSqlite(path) {
   if (typeof path !== 'string' || path === '') throw new TypeError('openSqlite needs a file path or ":memory:"');

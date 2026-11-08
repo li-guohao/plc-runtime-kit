@@ -1,12 +1,22 @@
 /**
+ * Fails loudly, with the three facts a caller needs, before any adapter is built.
+ * Exported so tests can inject a version and a loader instead of changing the real
+ * Node version.
+ *
+ * @param {string} [version]  Node version to check, defaults to the running one
+ * @param {() => SqliteModule | undefined} [load]  module loader, injectable for tests
+ * @returns {SqliteModule}
+ */
+export function assertSqliteAvailable(version?: string, load?: () => SqliteModule | undefined): SqliteModule;
+/**
  * Opens a SQLite file (or `':memory:'`) and returns the three pieces wired for
  * use. The caller owns `db` and must close it.
  *
  * @param {string} path
- * @returns {{db: DatabaseSync, driver: SqliteTransactionDriver, store: SqliteEffectStore}}
+ * @returns {{db: SqliteDatabase, driver: SqliteTransactionDriver, store: SqliteEffectStore}}
  */
 export function openSqlite(path: string): {
-    db: DatabaseSync;
+    db: SqliteDatabase;
     driver: SqliteTransactionDriver;
     store: SqliteEffectStore;
 };
@@ -15,8 +25,8 @@ export function openSqlite(path: string): {
  * composes with a surrounding transaction instead of forcing `BEGIN`.
  */
 export class SqliteTransactionDriver {
-    /** @param {DatabaseSync} db */
-    constructor(db: DatabaseSync);
+    /** @param {SqliteDatabase} db */
+    constructor(db: SqliteDatabase);
     /** @param {string} name */
     savepoint(name: string): void;
     /** @param {string} name */
@@ -30,8 +40,8 @@ export class SqliteTransactionDriver {
  * which matches the queue's one-pass-at-a-time contract.
  */
 export class SqliteEffectStore {
-    /** @param {DatabaseSync} db */
-    constructor(db: DatabaseSync);
+    /** @param {SqliteDatabase} db */
+    constructor(db: SqliteDatabase);
     /**
      * @param {string} kind
      * @param {string} key
@@ -92,4 +102,7 @@ export class SqliteEffectStore {
     };
     #private;
 }
-import { DatabaseSync } from 'node:sqlite';
+export type SqliteModule = {
+    DatabaseSync: typeof import("node:sqlite").DatabaseSync;
+};
+export type SqliteDatabase = import("node:sqlite").DatabaseSync;

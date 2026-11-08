@@ -32,7 +32,7 @@ stripping does **not** apply inside `node_modules`, which is why this is `.js`
 rather than `.ts`).
 
 Status: **0.1.0, reference implementation**. GitHub only — not published to
-npm. Tests: 42/42. Node >= 20 (the SQLite adapter needs >= 22.5).
+npm. Tests: 45/45. Node >= 20 (the SQLite adapter needs >= 22.5).
 
 ## Why
 
@@ -149,6 +149,22 @@ db.close();
 
 `node:sqlite` requires Node >= 22.5. The core has no version-specific imports
 and runs on Node >= 20 with `node --test`.
+
+`package.json` therefore keeps `engines.node: ">=20"` for the package as a
+whole, while the `plc-runtime-kit/sqlite` subpath needs `>=22.5`. Importing that
+subpath on an older Node fails at load time with an explicit error — not
+`ERR_UNKNOWN_BUILTIN_MODULE` — naming the minimum version, the version in use,
+and the fallback:
+
+```
+`plc-runtime-kit/sqlite` requires Node >= 22.5 for the built-in `node:sqlite`
+module (this Node version is too old); this process is Node 22.4.9.
+Use `plc-runtime-kit/memory` for an in-process effect store, or upgrade Node
+to 22.5 or newer.
+```
+
+The guard checks the version first and only then loads `node:sqlite`; it does
+not wrap unrelated failures.
 
 ## Semantics worth knowing
 
