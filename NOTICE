@@ -1,0 +1,25 @@
+# Provenance
+
+This package rewrites behaviour observed in the `dsh-superagent` prototype
+(branch `feat/maildrop-source`, commit `25158a9`). Upstream is MIT licensed:
+
+    Copyright (c) 2026 DeepSeek Harness Team
+
+The upstream repository is not public and is not linked here. The commit id is
+recorded so a reviewer with access can compare the two implementations.
+
+**No source lines were copied verbatim.** Every module below was rewritten
+against a port (an interface supplied by the caller) rather than lifted from the
+upstream file, so the package stays domain-neutral and dependency-free. The
+table records which upstream file informed which module, and which behaviour
+changed on purpose.
+
+| This package | Upstream source | Relationship |
+|---|---|---|
+| `src/unit.js` | `src/app/store.ts:140-162` (`atomic`, `afterCommit`) | Rewritten over a `TransactionDriver` port. Added: argument validation, rollback-failure surfacing, and `runPass` (one transaction per step, stop at the first failure, keep what already committed). |
+| `src/effects.js` | `src/app/effects.ts:64-166` (`enqueue`, `dispatch`, `attempt`) | Rewritten over an `EffectStore` port. Kept: `(kind, key)` coalescing with `seq` preserved and `generation` bumped, ordered head-of-queue blocking, per-kind concurrency limit, `Later`, capped exponential backoff, and an attempt deadline that fails the row while the abandoned handler keeps running without a guard. Changed: deadline is a per-kind option instead of a constructor callback; failures are reported through a `report` callback instead of health entries; an in-flight set prevents double dispatch. |
+| `src/health.js` | `src/infra/health.ts:1-35` | Rewritten. `claim` now creates a `ready` snapshot immediately; `snapshot()` returns copies instead of a live object. |
+| `src/state-machine.js` | none | New code. Upstream has no explicit `(state, command) -> state` table (its transitions are ad-hoc checks inside Tickets/Assignments/Evals), so this module is an addition, not an extraction. |
+| `src/memory.js` | none | New adapters: a snapshot-based transaction driver and an in-memory effect store, for tests and local runs. |
+| `src/sqlite.js` | `src/app/store.ts` schema, in spirit | New adapters built on Node's built-in `node:sqlite`. Upstream uses the same built-in module; the table shape is simplified and domain-free. |
+| `tests/*` | none | New. |

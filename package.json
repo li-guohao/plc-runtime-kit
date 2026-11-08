@@ -1,0 +1,55 @@
+{
+  "name": "plc-runtime-kit",
+  "version": "0.1.0",
+  "description": "Reference implementation of dependency-free runtime primitives for PLC-style reliability: per-pass transaction units, a durable effect queue with attempt deadlines, a single-writer health board, and an explicit transition table. Not a production dependency.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/li-guohao/plc-runtime-kit.git"
+  },
+  "types": "./types/index.d.ts",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./sqlite": {
+      "types": "./types/sqlite.d.ts",
+      "default": "./src/sqlite.js"
+    },
+    "./memory": {
+      "types": "./types/memory.d.ts",
+      "default": "./src/memory.js"
+    }
+  },
+  "files": [
+    "src",
+    "types",
+    "tests",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "build:types": "tsc -p tsconfig.build.json",
+    "check": "npm run build:types && node --test"
+  },
+  "keywords": [
+    "transaction",
+    "savepoint",
+    "outbox",
+    "effect-queue",
+    "idempotency",
+    "state-machine",
+    "health"
+  ],
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^5.9.3"
+  }
+}
