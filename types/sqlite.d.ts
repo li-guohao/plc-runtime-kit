@@ -1,14 +1,4 @@
 /**
- * Fails loudly, with the three facts a caller needs, before any adapter is built.
- * Exported so tests can inject a version and a loader instead of changing the real
- * Node version.
- *
- * @param {string} [version]  Node version to check, defaults to the running one
- * @param {() => SqliteModule | undefined} [load]  module loader, injectable for tests
- * @returns {SqliteModule}
- */
-export function assertSqliteAvailable(version?: string, load?: () => SqliteModule | undefined): SqliteModule;
-/**
  * Opens a SQLite file (or `':memory:'`) and returns the three pieces wired for
  * use. The caller owns `db` and must close it.
  *
@@ -20,6 +10,7 @@ export function openSqlite(path: string): {
     driver: SqliteTransactionDriver;
     store: SqliteEffectStore;
 };
+export { assertSqliteAvailable };
 /**
  * Transaction driver over `node:sqlite`. It only issues savepoints, so it
  * composes with a surrounding transaction instead of forcing `BEGIN`.
@@ -102,7 +93,5 @@ export class SqliteEffectStore {
     };
     #private;
 }
-export type SqliteModule = {
-    DatabaseSync: typeof import("node:sqlite").DatabaseSync;
-};
 export type SqliteDatabase = import("node:sqlite").DatabaseSync;
+import { assertSqliteAvailable } from './sqlite-guard.js';

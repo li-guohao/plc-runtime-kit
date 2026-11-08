@@ -4,10 +4,24 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EffectQueue } from '../src/effects.js';
-import { assertSqliteAvailable, openSqlite } from '../src/sqlite.js';
 import { createUnit } from '../src/unit.js';
 
-test('a committed unit survives a close and reopen; the queue resumes it', async () => {
+// Imported dynamically: on Node < 22.5 `src/sqlite.js` throws our own guard
+// error at import time, and a static import would fail the whole file. The
+// tests below are skipped explicitly on those versions; the guard itself is
+// covered on every version by sqlite-guard.test.js.
+const [major, minor] = process.versions.node.split('.').map((part) => Number.parseInt(part, 10));
+const supportsSqlite = major > 22 || (major === 22 && minor >= 5);
+const skipSqlite = supportsSqlite
+  ? false
+  : `node:sqlite requires Node >= 22.5; this job runs Node ${process.versions.node}`;
+const { openSqlite } = supportsSqlite ? await import('../src/sqlite.js') : {};
+
+const sqliteTest = supportsSqlite
+  ? test
+  : (name, fn) => test(name, { skip: skipSqlite }, fn);
+
+sqliteTest('a committed unit survives a close and reopen; the queue resumes it', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'plc-runtime-kit-'));
   const file = join(dir, 'runtime.db');
   try {
@@ -30,7 +44,7 @@ test('a committed unit survives a close and reopen; the queue resumes it', async
   }
 });
 
-test('a rolled-back unit leaves no effect row in sqlite', () => {
+sqliteTest('a rolled-back unit leaves no effect row in sqlite', () => {
   const { db, driver, store } = openSqlite(':memory:');
   const unit = createUnit(driver);
   try {
@@ -48,7 +62,7 @@ test('a rolled-back unit leaves no effect row in sqlite', () => {
   }
 });
 
-test('nested savepoints roll back only the inner level', () => {
+sqliteTest('nested savepoints roll back only the inner level', () => {
   const { db, driver, store } = openSqlite(':memory:');
   const unit = createUnit(driver);
   try {
@@ -71,7 +85,7 @@ test('nested savepoints roll back only the inner level', () => {
   }
 });
 
-test('the sqlite guard protects a newer payload', () => {
+sqliteTest('the sqlite guard protects a newer payload', () => {
   const { db, store } = openSqlite(':memory:');
   try {
     store.upsert('mail', 'k1', 'v1', 1000);
@@ -89,7 +103,7 @@ test('the sqlite guard protects a newer payload', () => {
   }
 });
 
-test('ordered dispatch holds back later rows on sqlite', async () => {
+sqliteTest('ordered dispatch holds back later rows on sqlite', async () => {
   const { db, store } = openSqlite(':memory:');
   let clock = 1000;
   try {
@@ -124,7 +138,7 @@ test('ordered dispatch holds back later rows on sqlite', async () => {
   }
 });
 
-test('summary reports attempts and the last error', async () => {
+sqliteTest('summary reports attempts and the last error', async () => {
   const { db, store } = openSqlite(':memory:');
   try {
     const queue = new EffectQueue(store, { now: () => 1000 });
@@ -156,7 +170,7 @@ test('summary reports attempts and the last error', async () => {
   }
 });
 
-test('savepoint names are validated before reaching sqlite', () => {
+sqliteTest('savepoint names are validated before reaching sqlite', () => {
   const { db, driver } = openSqlite(':memory:');
   try {
     assert.throws(() => driver.savepoint('x; DROP TABLE effect'), /invalid savepoint name/);
@@ -165,42 +179,5 @@ test('savepoint names are validated before reaching sqlite', () => {
   } finally {
     db.close();
   }
-});
-
-test('the sqlite guard accepts Node 22.5 and newer', () => {
-  const real = assertSqliteAvailable();
-  assert.equal(typeof real.DatabaseSync, 'function');
-  // Versions are compared numerically, not textually: "22.5.10" must pass just
-  // like "22.6.0".
-  assert.equal(assertSqliteAvailable('22.5.0', () => real), real);
-  assert.equal(assertSqliteAvailable('22.5.10', () => real), real);
-  assert.equal(assertSqliteAvailable('23.0.0', () => real), real);
-});
-
-test('the sqlite guard names the minimum, the actual version and the fallback', () => {
-  let probed = false;
-  assert.throws(
-    () =>
-      assertSqliteAvailable('22.4.9', () => {
-        probed = true;
-        return undefined;
-      }),
-    (error) => {
-      assert.match(error.message, /Node >= 22\.5/);
-      assert.match(error.message, /this process is Node 22\.4\.9/);
-      assert.match(error.message, /plc-runtime-kit\/memory/);
-      return true;
-    },
-  );
-  // A version that is already ruled out must not probe the module: the guard
-  // is a specific version check, not a catch-all around the import.
-  assert.equal(probed, false);
-});
-
-test('the sqlite guard reports a failed module load without hiding the version', () => {
-  assert.throws(
-    () => assertSqliteAvailable('24.0.0', () => undefined),
-    /Node >= 22\.5.*this process is Node 24\.0\.0.*plc-runtime-kit\/memory/s,
-  );
 });
 

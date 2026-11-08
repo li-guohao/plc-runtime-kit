@@ -8,12 +8,23 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      # One failing cell must not cancel the others: the matrix is evidence,
+      # not a race.
+      fail-fast: false
+      matrix:
+        # 22.4 is the negative probe. `node:sqlite` does not exist there, so the
+        # suite must observe our own guard error, not a builtin-module failure.
+        node: ['20', '22.4', '24']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: ${{ matrix.node }}
           cache: npm
+      # Record the exact patch version: setup-node resolves "22.4" to the latest
+      # 22.4.x, and the report quotes what actually ran.
+      - run: node --version
       - run: npm ci
       # Generated declarations are committed, so drift is a build failure.
       - run: npm run build:types

@@ -32,7 +32,7 @@ stripping does **not** apply inside `node_modules`, which is why this is `.js`
 rather than `.ts`).
 
 Status: **0.1.0, reference implementation**. GitHub only — not published to
-npm. Tests: 45/45. Node >= 20 (the SQLite adapter needs >= 22.5).
+npm. Tests: 47/47. Node >= 20 (the SQLite adapter needs >= 22.5).
 
 ## Why
 
@@ -193,16 +193,17 @@ not wrap unrelated failures.
 
 ## Tests
 
-42 tests, run with Node's built-in runner:
+47 tests, run with Node's built-in runner:
 
 ```sh
 node --test
 ```
 
-Coverage includes nested savepoint rollback, after-commit ordering and error
-isolation, merge-on-re-enqueue, ordered head blocking, deadline vs. abandoned
-handler, backoff cap, stale-guard protection, SQLite close/reopen resume,
-health ownership, and transition rejection.
+CI runs the suite on Node 20, 22.4 and 24. On 20 and 22.4 the SQLite tests are
+skipped with the Node version in the skip reason, while a child-process probe
+still imports `src/sqlite.js` and asserts the guard's message (minimum version,
+actual version, `plc-runtime-kit/memory`). CI reports `skipped` rather than
+passing those tests by accident.
 
 ## What stays behind
 
